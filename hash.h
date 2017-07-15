@@ -5,6 +5,13 @@
 
 #define NEW_TABLE_SIZE 97
 
+typedef enum {
+    HASH_FAIL_OTHER     = -3,
+    HASH_FAIL_PFUNCTION = -2,
+    HASH_FAIL_MALLOC    = -1,
+    HASH_SUCCESS        = 0,
+} hash_result;
+
 struct kv {
     void *k;
     void *v;

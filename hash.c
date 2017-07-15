@@ -7,7 +7,15 @@
 
 typedef index int32_t;
 
+typedef enum resize_amt {
+    RESIZE_QUARTER,
+    RESIZE_HALF,
+    RESIZE_DOUBLE,
+    RESIZE_QUADRUPLE,
+} e_resize_amt;
+
 static index hash_find_first_free_index (struct hashmap *self, void const *key);
+static struct kv *hash_kv_find (struct hashmap *self, void const *key);
 
 struct hashmap *hashmap_init (hash_function hash_fn,
                               hash_insert_key hash_key_fn,
@@ -146,3 +154,5 @@ static struct kv *hash_kv_find (struct hashmap *self, void const *key) {
     // Should never get here
     return NULL;
 }
+
+
