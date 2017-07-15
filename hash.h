@@ -7,7 +7,8 @@
 
 // TODO: Use these as return values
 typedef enum {
-    HASH_FAIL_OTHER     = -3,
+    HASH_FAIL_OTHER     = -4,
+    HASH_INVALID_PARAM  = -3,
     HASH_FAIL_PFUNCTION = -2,
     HASH_FAIL_MALLOC    = -1,
     HASH_SUCCESS        = 0,
@@ -19,8 +20,8 @@ struct kv {
 }
 
 typedef int32_t (*hash_function)(void *key);
-typedef int32_t (*hash_insert_key)(struct *kv);
-typedef int32_t (*hash_destroy)(struct *kv);
+typedef int32_t (*hash_insert)(struct const *kv src, struct *kv dest);
+typedef int32_t (*hash_remove)(struct *kv);
 typedef int32_t (*hash_compare)(struct const *kv1, struct const *kv2);
 
 struct hashmap {
@@ -32,7 +33,7 @@ struct hashmap {
     // How keys should be inserted
     hash_insert_key insert_key_fn;
     // How a key should be removed
-    hash_destroy    kv_remove;
+    hash_remove    kv_remove;
     // Expensive compare to make sure keys do match before returning
     // hit
     hash_compare    kk_compare;
@@ -40,8 +41,8 @@ struct hashmap {
 
 // CRUD functions
 struct hashmap *hashmap_init (hash_function hash_fn,
-                              hash_insert_key hash_key_fn,
-                              hash_destroy hash_kv_remove,
+                              hash_insert hash_insert,
+                              hash_removey hash_kv_remove,
                               hash_compare kk_compare);
 
 int32_t hashmap_destroy (struct hashmap *self);

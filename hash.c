@@ -11,19 +11,19 @@
 typedef index int32_t;
 
 typedef enum resize_amt {
-    RESIZE_QUARTER = -4,
-    RESIZE_HALF = -2,
-    RESIZE_DOUBLE = 2,
-    RESIZE_QUADRUPLE = 4,
+    RESIZE_QUARTER      = -4,
+    RESIZE_HALF         = -2,
+    RESIZE_DOUBLE       = 2,
+    RESIZE_QUADRUPLE    = 4,
 } e_resize_amt;
 
 static index hash_find_first_free_index (struct hashmap *self, void const *key);
 static struct kv *hash_kv_find (struct hashmap *self, void const *key);
-static void *resize_table (struct hashmap *self, e_resize_amt resize_factor);
+static hash_result resize_table (struct hashmap *self, e_resize_amt resize_factor);
 
 struct hashmap *hashmap_init (hash_function hash_fn,
                               hash_insert_key hash_key_fn,
-                              hash_destroy hash_kv_remove
+                              hash_remove hash_kv_remove
                               hash_compare hash_kk_compare) {
     if (!hash_fn || !key_cmp || !hash_dest) {
         // Invalid support for hash table functions
@@ -52,9 +52,9 @@ struct hashmap *hashmap_init (hash_function hash_fn,
     return hasht;
 }
 
-int32_t hashmap_destroy (struct hashmap *self) {
+hash_result hashmap_destroy (struct hashmap *self) {
     if (!self)
-        return -1;
+        return HASH_INVALID_PARAM;
 
     for (uint32_t i = 0; i < self->table_size; i++) {
         if (self->hasht->kv_table[i]) {
@@ -65,31 +65,25 @@ int32_t hashmap_destroy (struct hashmap *self) {
     
     free(self);
 
-    return 0;
+    return HASH_SUCCESS; 
 }
 
-int32_t hashmap_put (struct hashmap *self,
-                     struct const *kv) {
+hash_result hashmap_put (struct hashmap *self,
+                         struct const *kv) {
     if (!self || !kv)
-        return -1;
+        return HASH_INVALID_PARAM;
 
     index i = hash_find_first_free_index(self, kv->k);
 
-    const void *k_store = self->hash_insert_key(kv->k);
-
-    if (!k_store) {
-        // Out of memory, return failure occured due to part of function pointer code
-        return -2;
-    }
-    
-    self->kv_table[i].k = kv->k_store; 
-    self->kv_table[i].v = kv->v;
+    const void *k_store = self->hash_insert_key(kv, &self->kv_table[i]);
 
     self->num_entries++;
 
     if (self->num_entries * 1.0 / self->table_size > RESIZE_LARGE_FACTOR) {
-        // TODO: Resize table
+        return resize_table (self, e_resize_amt resize_factor);
     }
+
+    return HASH_SUCESS;
 }
 
 void * const hashmap_get (struct hashmap *self, void const *key) {
@@ -104,22 +98,26 @@ void * const hashmap_get (struct hashmap *self, void const *key) {
     return kv->v;
 }
 
-int32_t hashmap_remove (struct hashmap *self, void const *key) {
+hash_result hashmap_remove (struct hashmap *self, void const *key) {
     if (!self || !key) {
-        return -1;
+        return HASH_INVALID_PARAM;
     }
 
     struct kv *kv = hash_kv_find(self, key);
 
-    if (!kv) {
-        return -1;
-    }
+    hash_result removing_result = self->kv_remove(kv);
+
+    // If error occured when removing then return that
+    if (removing_result)
+        return removing_result;
 
     self->num_entries--;
 
     if (self->num_entries * 1.0 / self->table_size < RESIZE_SMALL_FACTOR) {
-        // TODO: Resize table
+        return resize_table (self, e_resize_amt resize_factor);
     }
+    
+    return HASH_SUCCESS;
 }
 
 static index hash_find_first_free_index (struct hashmap *self, void const *key) {
@@ -159,7 +157,7 @@ static struct kv *hash_kv_find (struct hashmap *self, void const *key) {
     return NULL;
 }
 
-static void *resize_table (struct hashmap *self, e_resize_amt resize_factor) {
+static hash_result resize_table (struct hashmap *self, e_resize_amt resize_factor) {
     size_t original_table_size = self->table_size;
     if (resize_factor < 0) {
         // Table is being made smaller
@@ -200,7 +198,7 @@ static void *resize_table (struct hashmap *self, e_resize_amt resize_factor) {
         struct kv *new_table = realloc(sizeof(kv) * original_table_size * resize_factor);
 
         if (!new_table)
-            return -1;
+            return HASH_FAIL_MALLOC;
 
         for (uint32_t i = 0; i < original_table_size; i++) {
             // Loop through and move all old entries to new_table
@@ -221,9 +219,10 @@ static void *resize_table (struct hashmap *self, e_resize_amt resize_factor) {
         }
 
         self->table_size = original_table_size * resize_factor;
-        self->kv_table = new_table;
+        return HASH_SUCCESS;
     }
     else {
-        return self->kv_table;
+        return HASH_SUCCESS;
     }
 }
+
