@@ -58,8 +58,9 @@ hash_result hashmap_destroy (struct hashmap *self) {
 
     for (uint32_t i = 0; i < self->table_size; i++) {
         if (self->hasht->kv_table[i]) {
-            // Remove shouldn't fail as it should only call free on code
-            self->kv_remove(&self->hasht->kv_table[i]);
+            if (self->kv_remove(&self->hasht->kv_table[i])) {
+                // Error occured
+            }
         }
     }
     
@@ -80,7 +81,7 @@ hash_result hashmap_put (struct hashmap *self,
     self->num_entries++;
 
     if (self->num_entries * 1.0 / self->table_size > RESIZE_LARGE_FACTOR) {
-        return resize_table (self, e_resize_amt resize_factor);
+        return resize_table (self, RESIZE_QUADRUPLE);
     }
 
     return HASH_SUCESS;
@@ -114,7 +115,7 @@ hash_result hashmap_remove (struct hashmap *self, void const *key) {
     self->num_entries--;
 
     if (self->num_entries * 1.0 / self->table_size < RESIZE_SMALL_FACTOR) {
-        return resize_table (self, e_resize_amt resize_factor);
+        return resize_table (self, RESIZE_QUARTER);
     }
     
     return HASH_SUCCESS;

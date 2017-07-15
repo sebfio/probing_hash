@@ -20,9 +20,9 @@ struct kv {
 }
 
 typedef int32_t (*hash_function)(void *key);
-typedef int32_t (*hash_insert)(struct const *kv src, struct *kv dest);
-typedef int32_t (*hash_remove)(struct *kv);
-typedef int32_t (*hash_compare)(struct const *kv1, struct const *kv2);
+typedef hash_result (*hash_insert)(struct const *kv src, struct *kv dest);
+typedef hash_result (*hash_remove)(struct *kv);
+typedef int32_t (*hash_compare)(void const *kv1, void const *kv2);
 
 struct hashmap {
     size_t table_size;
