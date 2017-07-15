@@ -5,17 +5,21 @@
 #define RESIZE_LARGE_FACTOR 0.4
 #define RESIZE_SMALL_FACTOR 0.05
 
+#define abs (num)           \
+    ((num) < 0) ? (num) * -1 : (num)
+
 typedef index int32_t;
 
 typedef enum resize_amt {
-    RESIZE_QUARTER,
-    RESIZE_HALF,
-    RESIZE_DOUBLE,
-    RESIZE_QUADRUPLE,
+    RESIZE_QUARTER = -4,
+    RESIZE_HALF = -2,
+    RESIZE_DOUBLE = 2,
+    RESIZE_QUADRUPLE = 4,
 } e_resize_amt;
 
 static index hash_find_first_free_index (struct hashmap *self, void const *key);
 static struct kv *hash_kv_find (struct hashmap *self, void const *key);
+static void *resize_table (struct hashmap *self, e_resize_amt resize_factor);
 
 struct hashmap *hashmap_init (hash_function hash_fn,
                               hash_insert_key hash_key_fn,
@@ -31,7 +35,7 @@ struct hashmap *hashmap_init (hash_function hash_fn,
     if (!hasht)
         return NULL;
 
-    hasht->kv_table = calloc(sizeof(kv), NEW_TABLE_SIZE);
+    hasht->kv_table = calloc(sizeof(struct kv), NEW_TABLE_SIZE);
 
     hasht->num_entries = 0;
     hasht->table_size = NEW_TABLE_SIZE;
@@ -125,7 +129,7 @@ static index hash_find_first_free_index (struct hashmap *self, void const *key) 
         uint32_t key_location = (i + initial_index) / self->table_size;
         
         // Find the first free NULL key
-        if (!self->table[key_location].k)
+        if (!self->kv_table[key_location].k)
             return key_location;
     }
 }
@@ -137,22 +141,89 @@ static struct kv *hash_kv_find (struct hashmap *self, void const *key) {
     for (uint32_t i = 0; i < self->table_size; i++) {
         uint32_t key_location = (i + initial_index) / self->table_size;
 
-        if (!self->hash(self->table[key_location].k)) {
+        if (!self->hash(self->kv_table[key_location].k)) {
             // Key does not exist
             return NULL;
         }
 
-        if (self->hash(self->table[key_location].k) != key_hash) {
+        if (self->hash(self->kv_table[key_location].k) != key_hash) {
             continue;
         }
 
         // Check exact keys match, if so return index
-        if (self->kk_compare(self->table[key_location].k, key) == 0)
-            return &self->table[key_location];
+        if (self->kk_compare(self->kv_table[key_location].k, key) == 0)
+            return &self->kv_table[key_location];
     }
 
     // Should never get here
     return NULL;
 }
 
+static void *resize_table (struct hashmap *self, e_resize_amt resize_factor) {
+    size_t original_table_size = self->table_size;
+    if (resize_factor < 0) {
+        // Table is being made smaller
+        // Realloc should not fail. Go through table and rehash everything to
+        // correct location
+        
+        for (uint32_t i = 0; i < original_table_size; i++) {
+            if (!self->kv_table[i].k)
+                continue;
 
+            // TODO: Block here
+
+            // Rehash key and insert it in the blocks at the correct size
+            struct kv copy_kv = self->kv_table[i];
+
+            // TODO: Make sure removed ok
+            hashmap_remove(self, copy_kv.k);
+
+            // Divide table by resize amt so that linear probing cannot place them in
+            // regions which will be out of bounds once resized
+            self->table_size /= abs(resize_factor);
+
+            // TODO: Make sure inserted ok
+            hashmap_put(self, copy_kv);
+            self->table_size = original_table_size;
+
+            // Unblock here
+        }
+        
+        // Nothing should be in the regions that will be removed
+        size_t old_table_size = (sizeof(struct kv) * original_table_size); 
+
+        self->table_size = old_table_size / abs(resize_factor);
+        return realloc(self->kv_table, self->table_size);
+    }
+    else if (resize_factor > 0) {
+        // Table is being made larger
+        struct kv *new_table = realloc(sizeof(kv) * original_table_size * resize_factor);
+
+        if (!new_table)
+            return -1;
+
+        for (uint32_t i = 0; i < original_table_size; i++) {
+            // Loop through and move all old entries to new_table
+            if (!self->kv_table[i].l)
+                continue;
+
+            // TODO: Block here
+            struct kv copy_kv = self->kv_table[i];
+
+            hashmap_remove(self, copy_kv.k);
+
+            self->table_size *= resize_factor;
+
+            hashmap_put(self, copy_kv);
+            self->table_size = original_table_size;
+
+            // Unblock here
+        }
+
+        self->table_size = original_table_size * resize_factor;
+        self->kv_table = new_table;
+    }
+    else {
+        return self->kv_table;
+    }
+}

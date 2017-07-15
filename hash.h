@@ -5,6 +5,7 @@
 
 #define NEW_TABLE_SIZE 97
 
+// TODO: Use these as return values
 typedef enum {
     HASH_FAIL_OTHER     = -3,
     HASH_FAIL_PFUNCTION = -2,
@@ -25,7 +26,7 @@ typedef int32_t (*hash_compare)(struct const *kv1, struct const *kv2);
 struct hashmap {
     size_t table_size;
     size_t num_entries;
-    void *table;
+    struct kv *kv_table;
     // Hash function for every key in table
     hash_function   hash_fn;
     // How keys should be inserted
