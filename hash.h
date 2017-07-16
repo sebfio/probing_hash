@@ -2,6 +2,7 @@
 #define HASH_H_
 
 #include <stdint.h>
+#include <stddef.h>
 
 #define NEW_TABLE_SIZE 97
 
@@ -17,11 +18,11 @@ typedef enum {
 struct kv {
     void *k;
     void *v;
-}
+};
 
-typedef int32_t (*hash_function)(void *key);
-typedef hash_result (*hash_insert)(struct const *kv src, struct *kv dest);
-typedef hash_result (*hash_remove)(struct *kv);
+typedef int32_t (*hash_function)(void const *key);
+typedef hash_result (*hash_insert)(struct kv const *src, struct kv *dest);
+typedef hash_result (*hash_remove)(struct kv*);
 typedef int32_t (*hash_compare)(void const *kv1, void const *kv2);
 
 struct hashmap {
@@ -29,26 +30,26 @@ struct hashmap {
     size_t num_entries;
     struct kv *kv_table;
     // Hash function for every key in table
-    hash_function   hash_fn;
-    // How keys should be inserted
-    hash_insert_key insert_key_fn;
+    hash_function hash_fn;
+    // How kv should be inserted
+    hash_insert insert_fn;
     // How a key should be removed
-    hash_remove    kv_remove;
+    hash_remove kv_remove;
     // Expensive compare to make sure keys do match before returning
     // hit
-    hash_compare    kk_compare;
-}
+    hash_compare kk_compare;
+};
 
 // CRUD functions
 struct hashmap *hashmap_init (hash_function hash_fn,
-                              hash_insert hash_insert,
-                              hash_removey hash_kv_remove,
+                              hash_insert insert_fn,
+                              hash_remove kv_remove,
                               hash_compare kk_compare);
 
 int32_t hashmap_destroy (struct hashmap *self);
 
 int32_t hashmap_put (struct hashmap *self,
-                     struct const *kv);
+                     struct kv const *);
 
 void * const hashmap_get (struct hashmap *self, void const *key);
 

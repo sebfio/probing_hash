@@ -5,10 +5,10 @@
 #define RESIZE_LARGE_FACTOR 0.4
 #define RESIZE_SMALL_FACTOR 0.05
 
-#define abs (num)           \
+#define abs(num)            \
     ((num) < 0) ? (num) * -1 : (num)
 
-typedef index int32_t;
+typedef int32_t index;
 
 typedef enum resize_amt {
     RESIZE_QUARTER      = -4,
@@ -22,10 +22,10 @@ static struct kv *hash_kv_find (struct hashmap *self, void const *key);
 static hash_result resize_table (struct hashmap *self, e_resize_amt resize_factor);
 
 struct hashmap *hashmap_init (hash_function hash_fn,
-                              hash_insert_key hash_key_fn,
-                              hash_remove hash_kv_remove
+                              hash_insert insert_fn,
+                              hash_remove hash_kv_remove,
                               hash_compare hash_kk_compare) {
-    if (!hash_fn || !key_cmp || !hash_dest) {
+    if (!hash_fn || !insert_fn || !hash_kv_remove || !hash_kk_compare) {
         // Invalid support for hash table functions
         return NULL;
     }
@@ -40,13 +40,13 @@ struct hashmap *hashmap_init (hash_function hash_fn,
     hasht->num_entries = 0;
     hasht->table_size = NEW_TABLE_SIZE;
 
-    if (!hasht->table) {
-        free(hasht)
+    if (!hasht->kv_table) {
+        free(hasht);
         return NULL;
     }
 
     hasht->hash_fn          = hash_fn;
-    hasht->insert_key_fn    = hash_key_fn;
+    hasht->insert_fn        = insert_fn;
     hasht->kv_remove        = hash_kv_remove;
     hasht->kk_compare       = hash_kk_compare;
     return hasht;
@@ -57,8 +57,8 @@ hash_result hashmap_destroy (struct hashmap *self) {
         return HASH_INVALID_PARAM;
 
     for (uint32_t i = 0; i < self->table_size; i++) {
-        if (self->hasht->kv_table[i]) {
-            if (self->kv_remove(&self->hasht->kv_table[i])) {
+        if (self->kv_table[i].k) {
+            if (self->kv_remove(&self->kv_table[i])) {
                 // Error occured
             }
         }
@@ -70,13 +70,16 @@ hash_result hashmap_destroy (struct hashmap *self) {
 }
 
 hash_result hashmap_put (struct hashmap *self,
-                         struct const *kv) {
+                         struct kv const *kv) {
     if (!self || !kv)
         return HASH_INVALID_PARAM;
 
     index i = hash_find_first_free_index(self, kv->k);
 
-    const void *k_store = self->hash_insert_key(kv, &self->kv_table[i]);
+    hash_result insert_result = self->insert_fn(kv, &self->kv_table[i]);
+    
+    if (insert_result)
+        return insert_result;
 
     self->num_entries++;
 
@@ -84,7 +87,7 @@ hash_result hashmap_put (struct hashmap *self,
         return resize_table (self, RESIZE_QUADRUPLE);
     }
 
-    return HASH_SUCESS;
+    return HASH_SUCCESS;
 }
 
 void * const hashmap_get (struct hashmap *self, void const *key) {
@@ -140,12 +143,12 @@ static struct kv *hash_kv_find (struct hashmap *self, void const *key) {
     for (uint32_t i = 0; i < self->table_size; i++) {
         uint32_t key_location = (i + initial_index) / self->table_size;
 
-        if (!self->hash(self->kv_table[key_location].k)) {
+        if (!self->hash_fn(self->kv_table[key_location].k)) {
             // Key does not exist
             return NULL;
         }
 
-        if (self->hash(self->kv_table[key_location].k) != key_hash) {
+        if (self->hash_fn(self->kv_table[key_location].k) != key_hash) {
             continue;
         }
 
@@ -182,7 +185,7 @@ static hash_result resize_table (struct hashmap *self, e_resize_amt resize_facto
             self->table_size /= abs(resize_factor);
 
             // TODO: Make sure inserted ok
-            hashmap_put(self, copy_kv);
+            hashmap_put(self, &copy_kv);
             self->table_size = original_table_size;
 
             // Unblock here
@@ -192,18 +195,20 @@ static hash_result resize_table (struct hashmap *self, e_resize_amt resize_facto
         size_t old_table_size = (sizeof(struct kv) * original_table_size); 
 
         self->table_size = old_table_size / abs(resize_factor);
-        return realloc(self->kv_table, self->table_size);
+        self->kv_table = realloc(self->kv_table, self->table_size);
+        return HASH_SUCCESS;
     }
     else if (resize_factor > 0) {
         // Table is being made larger
-        struct kv *new_table = realloc(sizeof(kv) * original_table_size * resize_factor);
+        struct kv *new_table = realloc(self->kv_table, 
+                sizeof(struct kv) * original_table_size * resize_factor);
 
         if (!new_table)
             return HASH_FAIL_MALLOC;
 
         for (uint32_t i = 0; i < original_table_size; i++) {
             // Loop through and move all old entries to new_table
-            if (!self->kv_table[i].l)
+            if (!self->kv_table[i].k)
                 continue;
 
             // TODO: Block here
@@ -213,7 +218,7 @@ static hash_result resize_table (struct hashmap *self, e_resize_amt resize_facto
 
             self->table_size *= resize_factor;
 
-            hashmap_put(self, copy_kv);
+            hashmap_put(self, &copy_kv);
             self->table_size = original_table_size;
 
             // Unblock here
